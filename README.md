@@ -47,7 +47,6 @@ notes live exactly where the papers are.
 
 - **Current version:** v0.1
 - This is the **free and open-source** edition
-- Advanced features may be introduced in a future Pro version
 
 ---
 
