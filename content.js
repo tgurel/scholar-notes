@@ -1,10 +1,16 @@
+/**
+ * Scholar Notes
+ * Add personal notes to Google Scholar search results.
+ * Author: Tanju Gurel 
+ * License: MIT
+ */
+
 /**********************
  *  GLOBAL STYLE
  **********************/
 let IS_SINGLE_PAPER_VIEW = false;
 
 function detectSinglePaperView() {
-  // Abstract veya tek makale layout varsa
   if (
     document.querySelector(".gs_fma_abs") ||
     document.querySelector(".gs_scl_summ")
@@ -180,28 +186,33 @@ btn.onclick = e => {
 		if (metaEl) {
 		  const text = metaEl.textContent;
 
-		  // Böl: [authors] - [journal, year] - [site]
-		  const parts = text.split(" - ");
-
-		  if (parts.length > 0) {
-			authors = parts[0].trim();
+		  const dashIndex = text.indexOf("-");
+		  if (dashIndex !== -1) {
+			authors = text.slice(0, dashIndex).trim();
 		  }
 
-		  if (parts.length > 1) {
-			const pubPart = parts[1];
-
-			// Yıl ayıkla (4 haneli)
-			const yearMatch = pubPart.match(/\b(19|20)\d{2}\b/);
-			if (yearMatch) {
-			  year = yearMatch[0];
-			}
-
-			// Dergi adı: yıldan önceki kısım
-			publication = pubPart.replace(/,\s*\b(19|20)\d{2}\b.*/, "").trim();
+		  const yearMatch = text.match(/\b(19|20)\d{2}\b/);
+		  if (yearMatch) {
+			year = yearMatch[0];
 		  }
+
+		  let remainder = text;
+
+		  if (authors) remainder = remainder.replace(authors, "");
+		  if (year) remainder = remainder.replace(year, "");
+
+		  remainder = remainder
+			  .replace(/,.*/, "")
+			  .replace(/-/g, " ")
+			  .replace(/^\s+/, "")
+			  .replace(/\s{2,}/g, " ")
+			  .trim();
+
+
+		  publication = remainder;
 		}
 
-
+		
 		chrome.storage.sync.set({
 		  [storageKey]: {
 			note: newNote,
@@ -245,15 +256,6 @@ btn.onclick = e => {
   });
 }
 
-function hasAbstractOrSummary(result) {
-  return (
-    result.querySelector(".gs_fma_abs") !== null ||
-    result.querySelector(".gs_scl_summ") !== null
-  );
-}
-
-
-
 /**********************
  *  TOP NOTES LINK
  **********************/
@@ -293,6 +295,66 @@ function addFloatingNotesLink() {
 
   document.body.appendChild(link);
 }
+
+function exportNotes() {
+  chrome.storage.sync.get(null, data => {
+    const notes = Object.values(data).filter(
+      v => v && typeof v === "object" && v.note
+    );
+
+    if (!notes.length) {
+      alert("No notes to export.");
+      return;
+    }
+
+    let md = "# Scholar Notes Export\n\n";
+    let txt = "SCHOLAR NOTES EXPORT\n\n";
+
+    notes
+      .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+      .forEach(n => {
+        const date = n.updatedAt
+          ? new Date(n.updatedAt).toISOString().split("T")[0]
+          : "unknown";
+
+        // Markdown
+        md += `## ${n.title || "Untitled paper"}\n`;
+        if (n.authors) md += `**Authors:** ${n.authors}\n`;
+        if (n.publication || n.year)
+			md += `**Publication:** ${n.publication || ""} ${n.year ? `(${n.year})` : ""}\n`;
+        if (n.url) md += `**Publisher URL:** ${n.url}\n`;
+        md += `\n### Note\n${n.note}\n\n_Last edited: ${date}_\n\n---\n\n`;
+
+        // TXT
+        txt += `TITLE: ${n.title || "Untitled paper"}\n`;
+        if (n.authors) txt += `AUTHORS: ${n.authors}\n`;
+        if (n.publication || n.year)
+			txt += `PUBLICATION: ${n.publication || ""} ${n.year ? `(${n.year})` : ""}\n`;
+        if (n.url) txt += `URL: ${n.url}\n`;
+        txt += `\nNOTE:\n${n.note}\n\nLAST EDITED: ${date}\n`;
+        txt += "----------------------------------------\n";
+      });
+
+    downloadFile("scholar-notes.md", md);
+    downloadFile("scholar-notes.txt", txt);
+  });
+}
+
+
+function downloadFile(filename, content) {
+  const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 
 function applyHighlight(result, noteText) {
   if (IS_SINGLE_PAPER_VIEW) return;
@@ -436,10 +498,10 @@ function loadNotesList() {
         if (!confirm("Remove this note?")) return;
 
 		chrome.storage.sync.remove(key, () => {
-		  const cid = key.replace("note_", "");   // ⭐ KRİTİK SATIR
-		  resetResultHighlightByCid(cid);          // ⭐ ANA SAYFAYI TEMİZLE
-		  loadNotesList();                         // listeyi yenile
-		  updateNotesBadge();                     // badge güncelle
+		  const cid = key.replace("note_", "");
+		  resetResultHighlightByCid(cid);
+		  loadNotesList();
+		  updateNotesBadge();
 		});
 
       };
@@ -495,55 +557,76 @@ function addFloatingNotesPanel() {
   panel.style.zIndex = "9999";
   panel.style.fontFamily = "Arial, sans-serif";
 
-	panel.innerHTML = `
-	  <div id="scholar-notes-btn-main" style="
-		background:#1a73e8;
-		color:#fff;
-		padding:10px 12px;
-		border-radius:6px 0 0 0;
-		cursor:pointer;
-		font-size:13px;
-		box-shadow:0 2px 6px rgba(0,0,0,0.2);
-		opacity:0.9;
-		position:relative;
-	  ">
-		📚 My saved notes
-		<span id="scholar-notes-badge" style="
-		  position:absolute;
-		  top:-6px;
-		  right:-6px;
-		  background:#e53935;
-		  color:#fff;
-		  font-size:11px;
-		  padding:2px 6px;
-		  border-radius:10px;
-		  display:none;
-		">0</span>
-	  </div>
+panel.innerHTML = `
+  <div id="scholar-notes-btn-main" style="
+    background:#1a73e8;
+    color:#fff;
+    padding:10px 12px;
+    border-radius:6px 0 0 0;
+    cursor:pointer;
+    font-size:13px;
+    box-shadow:0 2px 6px rgba(0,0,0,0.2);
+    opacity:0.9;
+    position:relative;
+  ">
+    📚 My saved notes
+    <span id="scholar-notes-badge" style="
+      position:absolute;
+      top:-6px;
+      right:-6px;
+      background:#e53935;
+      color:#fff;
+      font-size:11px;
+      padding:2px 6px;
+      border-radius:10px;
+      display:none;
+    ">0</span>
+  </div>
 
-	  <div id="scholar-notes-btn-save" style="
-		background:#f1f3f4;
-		color:#333;
-		padding:8px 12px;
-		cursor:pointer;
-		font-size:12px;
-		border-top:1px solid #ddd;
-	  ">
-		💾 Export notes
-	  </div>
+  <div id="scholar-notes-btn-export-md" style="
+    background:#f1f3f4;
+    color:#333;
+    padding:8px 12px;
+    cursor:pointer;
+    font-size:12px;
+    border-top:1px solid #ddd;
+  ">
+    📄 Export (MD + TXT)
+  </div>
 
-	  <div id="scholar-notes-btn-clear" style="
-		background:#fafafa;
-		color:#a00;
-		padding:6px 12px;
-		cursor:pointer;
-		font-size:11px;
-		border-top:1px solid #eee;
-		border-radius:0 0 0 6px;
-	  ">
-		⚠️ Clear all notes
-	  </div>
-	`;
+  <div id="scholar-notes-btn-export-json" style="
+    background:#f1f3f4;
+    color:#333;
+    padding:8px 12px;
+    cursor:pointer;
+    font-size:12px;
+    border-top:1px solid #ddd;
+  ">
+    🧩 Export (JSON)
+  </div>
+<div id="scholar-notes-btn-import-json" style="
+  background:#f1f3f4;
+  color:#333;
+  padding:8px 12px;
+  cursor:pointer;
+  font-size:12px;
+  border-top:1px solid #ddd;
+">
+  📥 Import (JSON)
+</div>
+
+  <div id="scholar-notes-btn-clear" style="
+    background:#fafafa;
+    color:#a00;
+    padding:6px 12px;
+    cursor:pointer;
+    font-size:11px;
+    border-top:1px solid #eee;
+    border-radius:0 0 0 6px;
+  ">
+    ⚠️ Clear all notes
+  </div>
+`;
 	
 
 
@@ -551,15 +634,27 @@ function addFloatingNotesPanel() {
   document.body.appendChild(panel);
 
   const mainBtn = document.getElementById("scholar-notes-btn-main");
-  const saveBtn = document.getElementById("scholar-notes-btn-save");
+const exportMdBtn = document.getElementById("scholar-notes-btn-export-md");
+const exportJsonBtn = document.getElementById("scholar-notes-btn-export-json");
+const importJsonBtn = document.getElementById("scholar-notes-btn-import-json");
 
-  mainBtn.onclick = () => openNotesListModal();
 
-  saveBtn.onclick = () => {
-    alert("Export notes feature will be available in a future version.");
-  };
 
-  // hover efekti
+mainBtn.onclick = () => openNotesListModal();
+
+exportMdBtn.onclick = () => {
+  exportNotes(); // MD + TXT export
+};
+
+exportJsonBtn.onclick = () => {
+  exportNotesAsJSON(); // JSON export
+};
+
+importJsonBtn.onclick = () => {
+  importNotesFromJSON();
+};
+
+  // hover effect
   panel.onmouseenter = () => panel.style.opacity = "1";
   panel.onmouseleave = () => panel.style.opacity = "0.9";
 
@@ -641,6 +736,82 @@ function resetResultHighlightByCid(cid) {
   });
 }
 
+function exportNotesAsJSON() {
+  chrome.storage.sync.get(null, data => {
+    const notes = {};
+
+    Object.entries(data).forEach(([key, val]) => {
+      if (key.startsWith("note_") && val && typeof val === "object") {
+        notes[key] = val;
+      }
+    });
+
+    if (!Object.keys(notes).length) {
+      alert("No notes to export.");
+      return;
+    }
+
+    const payload = {
+      version: "0.1",
+      exportedAt: new Date().toISOString(),
+      notes
+    };
+
+    const blob = new Blob(
+      [JSON.stringify(payload, null, 2)],
+      { type: "application/json" }
+    );
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "scholar-notes.json";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
+}
+
+function importNotesFromJSON() {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = "application/json";
+
+  input.onchange = () => {
+    const file = input.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(reader.result);
+
+        if (!parsed.notes || typeof parsed.notes !== "object") {
+          alert("Invalid file format.");
+          return;
+        }
+
+        if (!confirm("Import notes and overwrite existing ones if needed?")) {
+          return;
+        }
+
+        chrome.storage.sync.set(parsed.notes, () => {
+          updateNotesBadge();
+          addNoteButtons();
+          alert("Notes imported successfully.");
+        });
+      } catch (e) {
+        alert("Failed to read JSON file.");
+      }
+    };
+
+    reader.readAsText(file);
+  };
+
+  input.click();
+}
+
 
 
 /**********************
@@ -649,3 +820,24 @@ function resetResultHighlightByCid(cid) {
 addFloatingNotesPanel();
 addNoteButtons();
 setInterval(addNoteButtons, 2000);
+
+/**********************
+ *  STORAGE SYNC LISTENER
+ **********************/
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== "sync") return;
+
+  let shouldRefresh = false;
+
+  for (const key in changes) {
+    if (key.startsWith("note_")) {
+      shouldRefresh = true;
+      break;
+    }
+  }
+
+  if (shouldRefresh) {
+    addNoteButtons();       // UI update
+    updateNotesBadge();    // badge update
+  }
+});
