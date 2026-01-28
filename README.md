@@ -19,6 +19,12 @@ The goal is to keep literature exploration fast, focused, and distraction-free �
   - on the publisher’s website
   - or via a direct Google Scholar search
 - Notes are synchronized across devices using browser sync storage
+- Export notes as:
+  - TXT
+  - Markdown
+  - JSON (for backup and transfer)
+- Import notes from JSON files
+- Works across all Google Scholar country domains
 
 ---
 
@@ -43,9 +49,35 @@ notes live exactly where the papers are.
 
 ---
 
+## 📦 Export & Import
+
+### Export
+You can export your saved notes in:
+- **TXT** – simple plain text
+- **Markdown** – ideal for note-taking apps and research logs
+- **JSON** – full structured backup (recommended)
+
+### Import
+Previously exported JSON files can be imported to:
+- Restore notes
+- Move notes between computers
+- Keep long-term backups
+
+---
+
+## 🧠 Intended Use
+
+Scholar Notes is designed for:
+- Researchers
+- Graduate students
+- Academics
+- Anyone who regularly uses Google Scholar and wants lightweight note-taking without leaving the page
+
+
+
 ## 🧪 Project Status
 
-- **Current version:** v0.1
+- **Current version:** v0.1.0
 - This is the **free and open-source** edition
 
 ---
