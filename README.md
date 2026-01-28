@@ -103,6 +103,7 @@ Academic researcher & developer
 
 ## 🛠 Installation (Chrome Web Store)
 
+https://chromewebstore.google.com/detail/ifpnoegkihojgjbanmpilejdaefefonf?utm_source=item-share-cb
 
 ## 🛠 Installation (Development)
 
